@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NanoGPT Core // System Operations Dashboard</title>
+    <style>
+        :root {
+            --bg-main: #0b0d11;
+            --panel-bg: #11141a;
+            --panel-header: #171b24;
+            --border-dim: #222733;
+            --amber-active: #ffb000;
+            --green-ready: #4af626;
+            --blue-info: #00d2ff;
+            --text-main: #9aa5b9;
+            --text-bright: #e2e8f0;
+            --font-mono: 'Consolas', 'Courier New', monospace;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            margin: 0;
+            padding: 25px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .dashboard-container {
+            width: 100%;
+            max-width: 1150px;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-dim);
+            border-radius: 4px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.6);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Bar Diagnostics */
+        .top-bar {
+            background: var(--panel-header);
+            padding: 10px 20px;
+            border-bottom: 1px solid var(--border-dim);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-family: var(--font-mono);
+            font-size: 0.8em;
+            letter-spacing: 1px;
+        }
+
+        .system-ticker {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(74, 246, 38, 0.1);
+            color: var(--green-ready);
+            padding: 3px 8px;
+            border-radius: 2px;
+            font-weight: bold;
+            border: 1px solid rgba(74, 246, 38, 0.2);
+        }
+
+        /* Main Workspace Grid Split */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            min-height: 580px;
+        }
+
+        @media (max-width: 900px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Control Panel (Left column) */
+        .control-column {
+            border-right: 1px solid var(--border-dim);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            background: #0e1116;
+        }
+
+        .section-header {
+            font-family: var(--font-mono);
+            font-size: 0.75em;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-bright);
+            border-bottom: 1px solid var(--border-dim);
+            padding-bottom: 6px;
+            margin-bottom: 12px;
+        }
+
+        .param-table {
+            width: 100%;
+            font-family: var(--font-mono);
+            font-size: 0.85em;
+            margin-bottom: 15px;
+        }
+
+        .param-table tr td { padding: 5px 0; }
+        .param-table tr td:last-child { text-align: right; color: var(--blue-info); }
+
+        textarea {
+            width: 100%; height: 95px; background: #06080a;
+            border: 1px solid var(--border-dim); border-radius: 2px;
+            padding: 10px; color: #fff; font-family: var(--font-mono);
+            box-sizing: border-box; resize: none; font-size: 0.85em;
+        }
+        textarea:focus { outline: 1px solid var(--blue-info); }
+
+        input[type="number"] {
+            width: 100%; background: #06080a; border: 1px solid var(--border-dim);
+            padding: 8px; color: var(--amber-active); font-family: var(--font-mono);
+            box-sizing: border-box; border-radius: 2px;
+        }
+
+        /* Control Button Configuration */
+        button {
+            width: 100%; background: #1a222d; color: var(--text-bright);
+            border: 1px solid #2d3b4e; padding: 12px; font-family: var(--font-mono);
+            font-size: 0.9em; font-weight: bold; cursor: pointer; letter-spacing: 1px;
+            transition: all 0.2s; text-transform: uppercase;
+        }
+        button:hover { background: #222d3d; border-color: var(--blue-info); color: var(--blue-info); }
+        button:disabled { background: #0c0f14; color: #3a4353; border-color: #161c24; cursor: not-allowed; }
+
+        /* Monitor Output Columns (Right side) */
+        .monitor-column {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .output-viewport {
+            background: #05070a; border: 1px solid var(--border-dim);
+            flex-grow: 1; padding: 18px; display: flex; flex-direction: column;
+            position: relative; overflow: hidden; min-height: 340px;
+        }
+
+        .viewport-meta {
+            display: flex; justify-content: space-between;
+            font-family: var(--font-mono); font-size: 0.75em;
+            color: #525f73; border-bottom: 1px solid #141922;
+            padding-bottom: 8px; margin-bottom: 12px;
+        }
+
+        .terminal-stream-area {
+            white-space: pre-wrap; font-family: var(--font-mono);
+            font-size: 0.95em; line-height: 1.6; color: var(--text-bright);
+            height: 290px; overflow-y: auto;
+        }
+
+        /* Waveform Graph Area */
+        .waveform-panel {
+            height: 80px; background: #05070a;
+            border: 1px solid var(--border-dim);
+            border-radius: 2px; overflow: hidden; position: relative;
+        }
+
+        /* Activity Logs Frame */
+        .log-panel {
+            background: #090b10; border: 1px solid var(--border-dim);
+            height: 100px; padding: 10px; font-family: var(--font-mono);
+            font-size: 0.75em; overflow-y: auto; color: #525f73;
+        }
+        .log-entry { margin-bottom: 4px; }
+        .log-time { color: var(--blue-info); margin-right: 8px; }
+    </style>
+</head>
+<body>
+
+<div class="dashboard-container">
+    <div class="top-bar">
+        <div class="system-ticker">
+            <span class="status-pill"><span id="pulse-dot" style="width:6px;height:6px;background:var(--green-ready);border-radius:50%;"></span>CORE: ONLINE</span>
+            <span>HOST: 127.0.0.1:8000</span>
+            <span>ENGINE: PyTorch Causal Self-Attention</span>
+        </div>
+        <div id="runtime-clock">SYS_TIME: UTC-ACTIVE</div>
+    </div>
+
+    <div class="main-grid">
+        
+        <div class="control-column">
+            <div>
+                <div class="section-header">Hardware State Readouts</div>
+                <table class="param-table">
+                    <tr><td class="param-label">GPU Acceleration</td><td>ACTIVE (CUDA)</td></tr>
+                    <tr><td class="param-label">Context Block Size (T)</td><td>32 Tokens</td></tr>
+                    <tr><td class="param-label">Embedding Dimensions (C)</td><td>64 channels</td></tr>
+                    <tr><td class="param-label">Attention Heads Block Count</td><td>4 heads</td></tr>
+                    <tr><td class="param-label">Transformer Layers</td><td>4 layers</td></tr>
+                </table>
+            </div>
+
+            <div>
+                <div class="section-header">Execution Settings</div>
+                <div style="margin-bottom: 12px;">
+                    <label style="font-family:var(--font-mono);font-size:0.75em;color:#525f73;">SEED_CONTEXT_PROMPT:</label>
+                    <textarea id="prompt" placeholder="Provide starting characters (e.g., 'ROMEO:') or leave blank for full random sampling..."></textarea>
+                </div>
+                <div>
+                    <label style="font-family:var(--font-mono);font-size:0.75em;color:#525f73;margin-bottom:5px;display:block;">MAX_NEW_TOKENS:</label>
+                    <input type="number" id="tokens" value="450" min="10" max="1500">
+                </div>
+                <button id="fireBtn" onclick="runHardwareInference()" style="margin-top: 15px;">Execute Matrix Inference</button>
+            </div>
+        </div>
+
+        <div class="monitor-column">
+            <div class="output-viewport">
+                <div class="viewport-meta">
+                    <span>DEVICE_STREAM // DECODED_CHAR_ARRAY</span>
+                    <span id="state-flag" style="color:var(--text-main)">[STATE: IDLE]</span>
+                </div>
+                <div id="streamTerminal" class="terminal-stream-area">AWAITING SYSTEM MATRIX VECTOR INTRODUCTIONS...</div>
+            </div>
+
+            <div>
+                <div class="section-header" style="font-size:0.7em;color:#525f73;margin-bottom:5px;">Self-Attention Weight Energy Graph</div>
+                <div class="waveform-panel">
+                    <canvas id="waveCanvas" style="width:100%; height:100%;"></canvas>
+                </div>
+            </div>
+
+            <div>
+                <div class="section-header" style="font-size:0.7em;color:#525f73;margin-bottom:5px;">Subsystem System Activity Logs</div>
+                <div id="logPanel" class="log-panel">
+                    <div class="log-entry"><span class="log-time">[17:33:01]</span>INFO: Model architecture tables mapped out successfully.</div>
+                    <div class="log-entry"><span class="log-time">[17:33:02]</span>INFO: CUDA device engine linked. Shared memory allocation established.</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    // Live Canvas Audio Vector Generator logic tracking model operations
+    const canvas = document.getElementById('waveCanvas');
+    const ctx = canvas.getContext('2d');
+    let animationId = null;
+    let isComputing = false;
+
+    function resizeCanvas() {
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function drawOscilloscopeLine() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = isComputing ? '#ffb000' : '#222733';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+
+        const sliceWidth = canvas.width / 100;
+        let x = 0;
+
+        for (let i = 0; i < 100; i++) {
+            // Generate chaotic wave vectors while model computes, otherwise flat baseline line
+            const amplitude = isComputing ? (Math.random() * 25 + 5) : 2;
+            const frequency = isComputing ? 0.3 : 0.02;
+            const y = (canvas.height / 2) + Math.sin(i * frequency + Date.now() * 0.01) * amplitude;
+
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+
+            x += sliceWidth;
+        }
+        ctx.stroke();
+        animationId = requestAnimationFrame(drawOscilloscopeLine);
+    }
+    drawOscilloscopeLine();
+
+    // System diagnostic logging engine helper
+    function pushSystemLog(message) {
+        const panel = document.getElementById('logPanel');
+        const timestamp = new Date().toTimeString().split(' ');
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        entry.innerHTML = `<span class="log-time">[${timestamp}]</span>INFO: ${message}`;
+        panel.appendChild(entry);
+        panel.scrollTop = panel.scrollHeight;
+    }
+
+    // Modern progressive character decoding sequence array script 
+    function printTokenStream(targetElement, fullStringText) {
+        targetElement.innerText = "";
+        let characterPointer = 0;
+        const renderSpeed = fullStringText.length > 600 ? 2 : 5;
+
+        function renderNextChar() {
+            if (characterPointer < fullStringText.length) {
+                targetElement.innerText += fullStringText.charAt(characterPointer);
+                characterPointer++;
+                targetElement.scrollTop = targetElement.scrollHeight;
+                setTimeout(renderNextChar, renderSpeed);
+            } else {
+                // Return states back to standby operational configurations
+                isComputing = false;
+                document.getElementById('state-flag').innerText = "[STATE: IDLE]";
+                document.getElementById('state-flag').style.color = "var(--text-main)";
+                pushSystemLog("Token character serialization streaming sequence successfully wrapped up.");
+            }
+        }
+        renderNextChar();
+    }
+
+    async function runHardwareInference() {
+        const promptInput = document.getElementById('prompt');
+        const tokenInput = document.getElementById('tokens');
+        const consoleStream = document.getElementById('streamTerminal');
+        const actionButton = document.getElementById('fireBtn');
+        const indicatorText = document.getElementById('state-flag');
+        
+        actionButton.disabled = true;
+        isComputing = true;
+        indicatorText.innerText = "[STATE: ACTIVE_COMPUTE]";
+        indicatorText.style.color = "var(--amber-active)";
+        
+        pushSystemLog(`Forward pass requested. Target array expansion sequence size: ${tokenInput.value} tokens.`);
+        consoleStream.innerText = "Querying internal attention blocks, compiling query/key matrix multiplication dimensions...";
+
+        try {
+            const serverReply = await fetch('/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    prompt: promptInput.value, 
+                    max_tokens: parseInt(tokenInput.value) 
+                })
+            });
+            
+            const serverPayload = await serverReply.json();
+            
+            pushSystemLog("Softmax probabilities generation sequence parsed. Commencing local rendering pipeline mapping...");
+            indicatorText.innerText = "[STATE: DECODING_STREAM]";
+            indicatorText.style.color = "var(--blue-info)";
+            
+            printTokenStream(consoleStream, serverPayload.text);
+            
+        } catch (error) {
+            isComputing = false;
+            indicatorText.innerText = "[STATE: SYSTEM_ERROR]";
+            indicatorText.style.color = "#ff3333";
+            consoleStream.innerText = "CRITICAL DATA PASS ERROR: Loop verification dropped. Verify uvicorn framework is responding.";
+            pushSystemLog("CRITICAL FAILURE: API route pipeline exception identified.");
+            console.error(error);
+        } finally {
+            // Re-engage action triggers after a standard system initialization layout freeze buffer
+            setTimeout(() => { actionButton.disabled = false; }, 1500);
+        }
+    }
+
+    // Set simple operational current runtime clock ticker details
+    setInterval(() => {
+        document.getElementById('runtime-clock').innerText = "SYS_TIME: " + new Date().toISOString().replace('T', ' ').substring(0, 19);
+    }, 1000);
+</script>
+</body>
+</html>
